@@ -2,21 +2,18 @@
 const std = @import("std");
 const Io = std.Io;
 
-const EXIT_SUCCESS: u8 = 0;
-const EXIT_FAILURE: u8 = 1;
-
-//init: std.process.Init
-const Tulip = @import("Tulip");
-const Window = Tulip.Window;
+const tulip = @import("Tulip");
+const window = tulip.window;
+const Color = tulip.Color;
 
 pub fn main() void {
-  Window.create("App Title", 500, 500);
-  Window.vsync(false);
-  defer Window.destroy();
+  window.create("App Title", 500, 500);
+  window.vsync(false);
+  defer window.destroy();
   
-  while (Window.isOpen()) {
-    Window.clear(.{ .r = 1, .g = 0, .b = 1, .a = 1 });
-    Window.render();
+  while (window.isOpen()) {
+    window.clear(Color.palette.purple(0.15));
+    window.display();
   }
 }
 

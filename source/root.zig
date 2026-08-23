@@ -1,13 +1,13 @@
 
-const std = @import("std");
-const Io = std.Io;
+const core = @import("tulip/core.zig");
 
-const Rendering = @import("tulip/rendering.zig");
+pub const window = core.window;
+pub const Vertex = core.Vertex;
+pub const Color = core.Color;
 
-pub const Window = Rendering.Window;
-pub const Vec2 = Rendering.Vec2;
-pub const Vec3 = Rendering.Vec3;
-pub const Quaternion = Rendering.Quaternion;
-pub const Color = Rendering.Color;
-pub const Vertex = Rendering.Vertex;
+pub const Matrix = core.Matrix;
+pub const Quaternion = core.Quaternion;
+
+pub const Vec2T = core.Vec2T;
+pub const Vec3T = core.Vec3T;
 

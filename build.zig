@@ -1,3 +1,4 @@
+
 const std = @import("std");
 
 const sdl_include_path: []const u8 = "libraries/SDL3-3.4.14/include";
