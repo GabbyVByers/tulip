@@ -394,3 +394,26 @@ pub const window = struct {
   }
 };
 
+pub const Mesh = struct {
+  
+  //const Private = struct {
+  //  quaternion: Quaternion,
+  //  num_vertices: usize,
+  //  vertex_buffer: ?*SDL.SDL_GPUBuffer,
+  //  gpu_texture: ?*SDL.SDL_GPUTexture,
+  //};
+  //
+  //scale: f64,
+  //position: Vec3T(f64),
+  //private: Private,
+  //
+  //pub fn create() Mesh {
+  //  
+  //}
+  //
+  //pub fn destroy(this: *Mesh) void {
+  //  
+  //}
+  
+};
+

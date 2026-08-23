@@ -1,12 +1,7 @@
 
 const std = @import("std");
 
-const sdl_include_path: []const u8 = "libraries/SDL3-3.4.14/include";
-const sdl_import_library_path: []const u8 = "libraries/SDL3-3.4.14/lib/x64/SDL3.lib";
-const sdl_dll_path: []const u8 = "libraries/SDL3-3.4.14/lib/x64/SDL3.dll";
-
 pub fn build(b: *std.Build) void {
-  
   const target = b.standardTargetOptions(.{});
   const optimize = b.standardOptimizeOption(.{});
   
@@ -16,8 +11,10 @@ pub fn build(b: *std.Build) void {
     .optimize = optimize,
   });
   
-  tulip.addIncludePath(b.path(sdl_include_path));
-  tulip.addObjectFile(b.path(sdl_import_library_path));
+  tulip.addIncludePath(b.path("libraries/SDL3-3.4.14/include"));
+  tulip.addIncludePath(b.path("libraries/stb-master"));
+  tulip.addCSourceFile(.{ .file = b.path("libraries/stb-master/stb_image.c") });
+  tulip.addObjectFile(b.path("libraries/SDL3-3.4.14/lib/x64/SDL3.lib"));
   tulip.link_libc = true;
   
   const exe = b.addExecutable(.{
@@ -31,7 +28,7 @@ pub fn build(b: *std.Build) void {
   });
   
   b.installArtifact(exe);
-  b.installBinFile(sdl_dll_path, "SDL3.dll");
+  b.installBinFile("libraries/SDL3-3.4.14/lib/x64/SDL3.dll", "SDL3.dll");
   
   const run_cmd = b.addRunArtifact(exe);
   run_cmd.step.dependOn(b.getInstallStep());
