@@ -1,12 +1,16 @@
 
 const std = @import("std");
 const SDL = @cImport({@cInclude("SDL3/SDL.h");});
+pub const Image = @import("Image.zig");
 pub const Color = @import("Color.zig");
 pub const Matrix = @import("Matrix.zig");
 pub const Quaternion = @import("Quaternion.zig");
 pub const vectors = @import("vectors.zig");
 pub const Vec2T = vectors.Vec2T;
 pub const Vec3T = vectors.Vec3T;
+
+const EXIT_SUCCESS: u8 = 0;
+const EXIT_FAILURE: u8 = 1;
 
 pub const Vertex = struct {
   pos: Vec3T(f32),
@@ -15,9 +19,6 @@ pub const Vertex = struct {
 };
 
 pub const window = struct {
-  
-  const EXIT_SUCCESS: u8 = 0;
-  const EXIT_FAILURE: u8 = 1;
   
   const global = struct {
     var window: ?*SDL.SDL_Window = null;
@@ -396,24 +397,238 @@ pub const window = struct {
 
 pub const Mesh = struct {
   
-  //const Private = struct {
-  //  quaternion: Quaternion,
-  //  num_vertices: usize,
-  //  vertex_buffer: ?*SDL.SDL_GPUBuffer,
-  //  gpu_texture: ?*SDL.SDL_GPUTexture,
-  //};
-  //
-  //scale: f64,
-  //position: Vec3T(f64),
-  //private: Private,
-  //
-  //pub fn create() Mesh {
-  //  
-  //}
-  //
-  //pub fn destroy(this: *Mesh) void {
-  //  
-  //}
+  const Private = struct {
+    quaternion: Quaternion,
+    num_vertices: usize,
+    vertex_buffer: ?*SDL.SDL_GPUBuffer,
+    gpu_texture: ?*SDL.SDL_GPUTexture,
+  }; private: Private,
   
+  scale: f64,
+  position: Vec3T(f64),
+  
+  pub fn create() Mesh {
+    var this: Mesh = .{
+      .private = .{
+        .quaternion = .unit(),
+        .num_vertices = 0,
+        .vertex_buffer = null,
+        .gpu_texture = null,
+      },
+      .scale = 1,
+      .position = .{
+        .x = 0,
+        .y = 0,
+        .z = 0,
+      },
+    };
+    
+    std.debug.assert(window.global.window != null);
+    std.debug.assert(window.global.device != null);
+    
+    const texture_create_info: SDL.SDL_GPUTextureCreateInfo = .{
+      .type = SDL.SDL_GPU_TEXTURETYPE_2D,
+      .format = SDL.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB,
+      .usage = SDL.SDL_GPU_TEXTUREUSAGE_SAMPLER,
+      .width = 1,
+      .height = 1,
+      .layer_count_or_depth = 1,
+      .num_levels = 1,
+      .sample_count = SDL.SDL_GPU_SAMPLECOUNT_1,
+    };
+    
+    this.private.gpu_texture = SDL.SDL_CreateGPUTexture(window.global.device, &texture_create_info);
+    if (this.private.gpu_texture == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const transfer_buffer_create_info: SDL.SDL_GPUTransferBufferCreateInfo = .{
+      .usage = SDL.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+      .size = 4,
+    };
+    
+    const transfer_buffer: ?*SDL.SDL_GPUTransferBuffer = SDL.SDL_CreateGPUTransferBuffer(window.global.device, &transfer_buffer_create_info);
+    defer SDL.SDL_ReleaseGPUTransferBuffer(window.global.device, transfer_buffer);
+    if (transfer_buffer == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const transfer_buffer_beginning: ?*anyopaque = SDL.SDL_MapGPUTransferBuffer(window.global.device, transfer_buffer, false);
+    defer SDL.SDL_UnmapGPUTransferBuffer(window.global.device, transfer_buffer);
+    if (transfer_buffer_beginning == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const single_white_pixel: [4]u8 = .{ 255, 255, 255, 255 };
+    const memcpy_result: ?*anyopaque = SDL.SDL_memcpy(transfer_buffer_beginning, @ptrCast(&single_white_pixel[0]), 4);
+    if (memcpy_result != transfer_buffer_beginning) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    window.frame.command_buffer = SDL.SDL_AcquireGPUCommandBuffer(window.global.device);
+    if (window.frame.command_buffer == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const copy_pass: ?*SDL.SDL_GPUCopyPass = SDL.SDL_BeginGPUCopyPass(window.frame.command_buffer);
+    if (copy_pass == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const texture_transfer_info: SDL.SDL_GPUTextureTransferInfo = .{
+      .transfer_buffer = transfer_buffer,
+      .pixels_per_row = 1,
+      .rows_per_layer = 1,
+    };
+    
+    const destination_texture_region: SDL.SDL_GPUTextureRegion = .{
+      .texture = this.private.gpu_texture,
+      .w = 1,
+      .h = 1,
+      .d = 1,
+    };
+    
+    SDL.SDL_UploadToGPUTexture(copy_pass, &texture_transfer_info, &destination_texture_region, false);
+    SDL.SDL_EndGPUCopyPass(copy_pass);
+    if (!SDL.SDL_SubmitGPUCommandBuffer(window.frame.command_buffer)) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    window.frame.command_buffer = null;
+    return this;
+  }
+  
+  pub fn upload(this: *Mesh, vertices: []Vertex) void {
+    std.debug.assert(window.global.window != null);
+    std.debug.assert(window.global.device != null);
+    
+    this.private.num_vertices = 0;
+    const release_existing_gpu_buffer: bool = (this.private.vertex_buffer != null);
+    if (release_existing_gpu_buffer){
+      SDL.SDL_ReleaseGPUBuffer(window.global.device, this.private.vertex_buffer);
+      this.private.vertex_buffer = null;
+    }
+    
+    const vertex_buffer_create_info: SDL.SDL_GPUBufferCreateInfo = .{
+      .size = @intCast(vertices.len * @sizeOf(Vertex)),
+      .usage = SDL.SDL_GPU_BUFFERUSAGE_VERTEX,
+    };
+    
+    this.private.num_vertices = vertices.len;
+    this.private.vertex_buffer = SDL.SDL_CreateGPUBuffer(window.global.device, &vertex_buffer_create_info);
+    if (this.private.vertex_buffer == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const transfer_buffer_create_info: SDL.SDL_GPUTransferBufferCreateInfo = .{
+      .size = @intCast(vertices.len * @sizeOf(Vertex)),
+      .usage = SDL.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+    };
+    
+    const transfer_buffer: ?*SDL.SDL_GPUTransferBuffer = SDL.SDL_CreateGPUTransferBuffer(window.global.device, &transfer_buffer_create_info);
+    defer SDL.SDL_ReleaseGPUTransferBuffer(window.global.device, transfer_buffer);
+    if (transfer_buffer == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const transfer_buffer_beginning: ?*anyopaque = SDL.SDL_MapGPUTransferBuffer(window.global.device, transfer_buffer, false);
+    defer SDL.SDL_UnmapGPUTransferBuffer(window.global.device, transfer_buffer);
+    if (transfer_buffer_beginning == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const memcpy_result: ?*anyopaque = SDL.SDL_memcpy(transfer_buffer_beginning, @ptrCast(vertices), vertices.len * @sizeOf(Vertex));
+    if (memcpy_result != transfer_buffer_beginning) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    window.frame.command_buffer = SDL.SDL_AcquireGPUCommandBuffer(window.global.device);
+    if (window.frame.command_buffer == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const copy_pass: ?*SDL.SDL_GPUCopyPass = SDL.SDL_BeginGPUCopyPass(window.frame.command_buffer);
+    if (copy_pass == null) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    }
+    
+    const transfer_buffer_location: SDL.SDL_GPUTransferBufferLocation = .{
+      .transfer_buffer = transfer_buffer,
+    };
+    
+    const destination_buffer_region: SDL.SDL_GPUBufferRegion = .{
+      .buffer = this.private.vertex_buffer,
+      .size = @intCast(vertices.len * @sizeOf(Vertex)),
+    };
+    
+    SDL.SDL_UploadToGPUBuffer(copy_pass, &transfer_buffer_location, &destination_buffer_region, true);
+    SDL.SDL_EndGPUCopyPass(copy_pass);
+    if (!SDL.SDL_SubmitGPUCommandBuffer(window.frame.command_buffer)) {
+      std.debug.print("SDL Error: {s}\n", .{ SDL.SDL_GetError() });
+      std.process.exit(EXIT_FAILURE);
+    } window.frame.command_buffer = null;
+  }
+  
+  pub fn draw(this: *Mesh) void {
+    //const aspect_ratio: f64 = @as(f64, window.global.dimensions.x) / @as(f64, window.global.dimensions.y);
+    const model_matrix: Matrix = .model(this.scale, this.position, this.private.quaternion);
+    //const view_matrix: Matrix = .view(Camera.position, Camera.quaternion);
+    const view_matrix: Matrix = .identity();
+    //const projection_matrix: Matrix = .project(Camera.fov, aspect_ratio);
+    const projection_matrix: Matrix = .identity();
+    const mvp_matrix: Matrix = .mul(.mul(projection_matrix, view_matrix), model_matrix);
+    SDL.SDL_PushGPUVertexUniformData(window.frame.command_buffer, 0, @ptrCast(&mvp_matrix.columnmajor()[0]), @intCast(@sizeOf(f32) * 16));
+    
+    std.debug.assert(this.private.vertex_buffer != null);
+    std.debug.assert(this.private.gpu_texture != null);
+    std.debug.assert(window.frame.render_pass != null);
+    
+    const buffer_binding: SDL.SDL_GPUBufferBinding = .{
+      .buffer = this.private.vertex_buffer,
+    };
+    
+    const texture_binding: SDL.SDL_GPUTextureSamplerBinding = .{
+      .texture = this.private.gpu_texture,
+      .sampler = window.global.sampler,
+    };
+    
+    SDL.SDL_BindGPUVertexBuffers(window.frame.render_pass, 0, &buffer_binding, 1);
+    SDL.SDL_BindGPUFragmentSamplers(window.frame.render_pass, 0, &texture_binding, 1);
+    SDL.SDL_DrawGPUPrimitives(window.frame.render_pass, @intCast(this.private.num_vertices), 1, 0, 0);
+  }
+  
+  pub fn destroy(this: *Mesh) void {
+    this.scale = 1;
+    this.position = .{ .x = 0, .y = 0, .z = 0 };
+    this.private.num_vertices = 0;
+    this.private.quaternion = .unit();
+    
+    const release_vertex_buffer: bool = (this.private.vertex_buffer != null);
+    if (release_vertex_buffer) {
+      std.debug.assert(window.global.device != null);
+      SDL.SDL_ReleaseGPUBuffer(window.global.device, this.private.vertex_buffer);
+      this.private.vertex_buffer = null;
+    }
+    
+    const release_gpu_texture: bool = (this.private.gpu_texture != null);
+    if (release_gpu_texture) {
+      std.debug.assert(window.global.device != null);
+      SDL.SDL_ReleaseGPUTexture(window.global.device, this.private.gpu_texture);
+      this.private.gpu_texture = null;
+    }
+  }
 };
 

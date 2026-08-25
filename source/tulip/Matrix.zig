@@ -88,23 +88,23 @@ pub fn project(fov: f64, aspect_ratio: f64) Matrix {
   };
 }
 
-pub fn mul(this: *Matrix, other: Matrix) Matrix {
+pub fn mul(a: Matrix, b: Matrix) Matrix {
   var result: Matrix = undefined;
   for (0..4) |i| {
     for (0..4) |j| {
       var sum: f64 = 0;
       for (0..4) |k| {
-        sum += this.grid[(i * 4) + k] * other.grid[(k * 4) + j];
+        sum += a.grid[(i * 4) + k] * b.grid[(k * 4) + j];
       } result.grid[(i * 4) + j] = sum;
     }
   } return result;
 }
 
-pub fn columnmajor(this: *Matrix) [16]f32 {
+pub fn columnmajor(this: *const Matrix) [16]f32 {
   var result: [16]f32 = undefined;
   for (0..4) |i| {
     for (0..4) |j| {
-      result.grid[(i * 4) + j] = @floatCast(this.grid[(j * 4) + i]);
+      result[(i * 4) + j] = @floatCast(this.grid[(j * 4) + i]);
     }
   } return result;
 }

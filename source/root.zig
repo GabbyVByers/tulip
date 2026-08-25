@@ -1,6 +1,8 @@
 
 const core = @import("tulip/core.zig");
 pub const window = core.window;
+pub const Mesh = core.Mesh;
+pub const Vertex = core.Vertex;
 
 pub const Color = @import("tulip/Color.zig");
 pub const Matrix = @import("tulip/Matrix.zig");
