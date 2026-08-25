@@ -1,13 +1,15 @@
 
 const std = @import("std");
 const SDL = @cImport({@cInclude("SDL3/SDL.h");});
-pub const Image = @import("Image.zig");
-pub const Color = @import("Color.zig");
-pub const Matrix = @import("Matrix.zig");
-pub const Quaternion = @import("Quaternion.zig");
-pub const vectors = @import("vectors.zig");
-pub const Vec2T = vectors.Vec2T;
-pub const Vec3T = vectors.Vec3T;
+
+const camera = @import("camera.zig");
+const Image = @import("Image.zig");
+const Color = @import("Color.zig");
+const Matrix = @import("Matrix.zig");
+const Quaternion = @import("Quaternion.zig");
+const vectors = @import("vectors.zig");
+const Vec2T = vectors.Vec2T;
+const Vec3T = vectors.Vec3T;
 
 const EXIT_SUCCESS: u8 = 0;
 const EXIT_FAILURE: u8 = 1;
@@ -583,12 +585,10 @@ pub const Mesh = struct {
   }
   
   pub fn draw(this: *Mesh) void {
-    //const aspect_ratio: f64 = @as(f64, window.global.dimensions.x) / @as(f64, window.global.dimensions.y);
+    const aspect_ratio: f64 = @as(f64, window.global.dimensions.x) / @as(f64, window.global.dimensions.y);
     const model_matrix: Matrix = .model(this.scale, this.position, this.private.quaternion);
-    //const view_matrix: Matrix = .view(Camera.position, Camera.quaternion);
-    const view_matrix: Matrix = .identity();
-    //const projection_matrix: Matrix = .project(Camera.fov, aspect_ratio);
-    const projection_matrix: Matrix = .identity();
+    const view_matrix: Matrix = .view(camera.position, camera.private.quaternion);
+    const projection_matrix: Matrix = .project(camera.fov, aspect_ratio);
     const mvp_matrix: Matrix = .mul(.mul(projection_matrix, view_matrix), model_matrix);
     SDL.SDL_PushGPUVertexUniformData(window.frame.command_buffer, 0, @ptrCast(&mvp_matrix.columnmajor()[0]), @intCast(@sizeOf(f32) * 16));
     
